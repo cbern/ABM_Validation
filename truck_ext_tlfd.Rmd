@@ -1,0 +1,203 @@
+---
+title: "MORPC Trip Length Frequency Distributions"
+author: "Chrissy Bernardo"
+date: "August 10, 2016"
+output: word_document
+---
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=13, fig.height=7}
+
+
+#TLFD for MORPC Trucks
+
+library(foreign)
+library(readr)
+library(dplyr)
+library(ggplot2)
+
+
+# Define graph theme
+theme_dcurve <- function(){
+  theme(
+    strip.text = element_text(size=15),
+    plot.title = element_text(size=17, face="bold"),
+    axis.text = element_text(size=15),
+    axis.title = element_text(size=15),
+    legend.text = element_text(size=15),
+    legend.title = element_text(size=15),
+    legend.key.width = unit(3,"line"),
+    axis.line.x = element_line(color = "black"),
+    axis.line.y = element_line(color = "black"),
+    panel.grid.minor = element_line(linetype="dotted", size=1)
+  )
+}
+
+
+setwd("U:/Ohio3C/9_Integration/checkTrucks")
+
+skim <- read.dbf("MD_distSkim.dbf")
+trips <- read.dbf("DY_trips.dbf")
+
+trips$mode <- factor(trips$M, levels=c(1:12), 
+                            labels=c("AUTOCOMM","ALLTRK","SOV1","SOV2","SOV3","HOV1","HOV2","HOV3",
+                                     "COM_FREIGHT","COM_NONFREIGHT","SUT","MUT"))
+levels(trips$mode) <- c("AUTOCOMM","ALLTRK","AUTO","AUTO","AUTO","AUTO","AUTO","AUTO",
+                        "COM_FREIGHT","COM_NONFREIGHT","SUT","MUT")
+
+skim <- rename(skim, dist=V1)
+trips <- rename(trips, ntrips=V1)
+
+tripskm <- left_join(trips, skim, by=c("I","J"))
+
+# EI/IE Trips
+ext <- tripskm %>%
+  filter((I>2107 & J<=2107) | (J>2107 & I<=2107)) %>%
+  filter(M1.x >2)
+
+ggplot(data=ext, aes(dist, colour=mode, weight=ntrips)) + 
+  geom_freqpoly(binwidth=5, aes(y=..density..), size=1)+
+  labs(title="3C: IE/EI Trips")+
+  xlim(0,100)+
+  theme_dcurve()
+
+
+# II Trips
+int <- tripskm %>%
+  filter(I<2107 & J<2107) %>%
+  filter(M1.x >2)
+
+ggplot(data=int, aes(dist, colour=mode, weight=ntrips)) + 
+  geom_freqpoly(binwidth=2, aes(y=..density..), size=1)+
+  labs(title="3C: II Trips")+
+  xlim(0,60)+
+  theme_dcurve()
+
+
+
+# Old Truck Model
+#__________________
+
+oldtrips <- read_csv("D:/OH_ABM_DTA/3_Truck_and_Ext/TripFile_Trk_Ext24.csv")
+
+oldtrips$mode <- factor(oldtrips$tripmode, levels=c(1:5), 
+                        labels=c("SOV","HOV","LTRK","MTRK","HTRK")) 
+
+levels(oldtrips$mode) <- c("AUTO","AUTO","LTRK","MTRK","HTRK")
+
+oldtripskm <- left_join(oldtrips, skim, by=c("origtaz10"="I","desttaz10"="J"))
+
+# EI/IE Trips
+oldext <- oldtripskm %>%
+  filter((origtaz10>2107 & desttaz10<=2107) | (desttaz10>2107 & origtaz10<=2107)) 
+
+ggplot(data=oldext, aes(dist, colour=mode)) + 
+  geom_freqpoly(binwidth=5, aes(y=..density..), size=1)+
+  labs(title="Old Model: IE/EI Trips")+
+  xlim(0,100)+
+  theme_dcurve()
+
+
+# II Trips
+oldint <- oldtripskm %>%
+  filter(origtaz10<2107 & desttaz10<2107) 
+
+ggplot(data=oldint, aes(dist, colour=mode)) + 
+  geom_freqpoly(binwidth=2, aes(y=..density..), size=1)+
+  labs(title="Old Model: II Trips")+
+  xlim(0,60)+
+  theme_dcurve()
+
+
+# Combined Graphs
+#__________________
+
+oldtripskm1 <- oldtripskm %>%
+  rename(I=origtaz10, J=desttaz10)%>%
+  mutate(ntrips=1,
+         src="Old MORPC Model")
+
+tripskm <- tripskm %>%
+  mutate(src="3C Model")
+
+comb <- bind_rows(tripskm, oldtripskm1)
+names(comb)
+
+ggplot(data=comb[comb$mode=="AUTO" & ((comb$I>2107 & comb$J<=2107) | (comb$J>2107 & comb$I<=2107)),], aes(dist, colour=src, weight=ntrips)) + 
+  geom_freqpoly(binwidth=2, aes(y=..density..), size=1)+
+  labs(title="TLFD: EI/IE Auto Trips")+
+  theme_dcurve()
+
+ggplot(data=comb[(comb$mode=="LTRK" | comb$mode=="COM_FREIGHT" | comb$mode=="COM_NONFREIGHT") & ((comb$I>2107 & comb$J<=2107) | (comb$J>2107 & comb$I<=2107)),], aes(dist, colour=src, weight=ntrips)) + 
+  geom_freqpoly(binwidth=5, aes(y=..density..), size=1)+
+  labs(title="TLFD: EI/IE Comm Trips")+
+  theme_dcurve()
+
+ggplot(data=comb[(comb$mode=="SUT" | comb$mode=="MTRK") & ((comb$I>2107 & comb$J<=2107) | (comb$J>2107 & comb$I<=2107)),], aes(dist, colour=src, weight=ntrips)) + 
+  geom_freqpoly(binwidth=5, aes(y=..density..), size=1)+
+  labs(title="TLFD: EI/IE SUT Trips")+
+  theme_dcurve()
+
+ggplot(data=comb[(comb$mode=="MUT" | comb$mode=="HTRK") & ((comb$I>2107 & comb$J<=2107) | (comb$J>2107 & comb$I<=2107)),], aes(dist, colour=src, weight=ntrips)) + 
+  geom_freqpoly(binwidth=5, aes(y=..density..), size=1)+
+  labs(title="TLFD: EI/IE MUT Trips")+
+  theme_dcurve()
+
+
+```
+
+### Green = 3C
+### Blue = Old MORPC Model
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.width=13, fig.height=7}
+# BARS
+
+ggplot(data=comb, aes(dist, weight=ntrips)) + 
+  geom_histogram(data=subset(comb[(comb$mode=="AUTO") & ((comb$I>2107 & comb$J<=2107) | (comb$J>2107 & comb$I<=2107)),], src=="3C Model"),        fill="green", alpha=0.2, binwidth=2, aes(y=..density..))+
+  geom_histogram(data=subset(comb[(comb$mode=="AUTO") & ((comb$I>2107 & comb$J<=2107) | (comb$J>2107 & comb$I<=2107)),], src=="Old MORPC Model"), fill="blue",  alpha=0.2, binwidth=2, aes(y=..density..))+
+  labs(title="TLFD: EI/IE Auto Trips")+
+  theme_dcurve()
+
+ggplot(data=comb, aes(dist, weight=ntrips)) + 
+  geom_histogram(data=subset(comb[(comb$mode=="LTRK" | comb$mode=="COM_FREIGHT" | comb$mode=="COM_NONFREIGHT") & ((comb$I>2107 & comb$J<=2107) | (comb$J>2107 & comb$I<=2107)),], src=="3C Model"),        fill="green", alpha=0.2, binwidth=2, aes(y=..density..))+
+  geom_histogram(data=subset(comb[(comb$mode=="LTRK" | comb$mode=="COM_FREIGHT" | comb$mode=="COM_NONFREIGHT") & ((comb$I>2107 & comb$J<=2107) | (comb$J>2107 & comb$I<=2107)),], src=="Old MORPC Model"), fill="blue",  alpha=0.2, binwidth=2, aes(y=..density..))+
+  labs(title="TLFD: EI/IE 4T Trips")+
+  theme_dcurve()
+
+ggplot(data=comb, aes(dist, weight=ntrips)) + 
+  geom_histogram(data=subset(comb[(comb$mode=="SUT" | comb$mode=="MTRK") & ((comb$I>2107 & comb$J<=2107) | (comb$J>2107 & comb$I<=2107)),], src=="3C Model"),        fill="green", alpha=0.2, binwidth=2, aes(y=..density..))+
+  geom_histogram(data=subset(comb[(comb$mode=="SUT" | comb$mode=="MTRK") & ((comb$I>2107 & comb$J<=2107) | (comb$J>2107 & comb$I<=2107)),], src=="Old MORPC Model"), fill="blue",  alpha=0.2, binwidth=2, aes(y=..density..))+
+  labs(title="TLFD: EI/IE SUT Trips")+
+  theme_dcurve()
+
+ggplot(data=comb, aes(dist, weight=ntrips)) + 
+  geom_histogram(data=subset(comb[(comb$mode=="MUT" | comb$mode=="HTRK") & ((comb$I>2107 & comb$J<=2107) | (comb$J>2107 & comb$I<=2107)),], src=="3C Model"),        fill="green", alpha=0.2, binwidth=2, aes(y=..density..))+
+  geom_histogram(data=subset(comb[(comb$mode=="MUT" | comb$mode=="HTRK") & ((comb$I>2107 & comb$J<=2107) | (comb$J>2107 & comb$I<=2107)),], src=="Old MORPC Model"), fill="blue",  alpha=0.2, binwidth=2, aes(y=..density..))+
+  labs(title="TLFD: EI/IE MUT Trips")+
+  theme_dcurve()
+
+
+ggplot(data=comb, aes(dist, weight=ntrips)) + 
+  geom_histogram(data=subset(comb[(comb$mode=="LTRK" | comb$mode=="COM_FREIGHT" | comb$mode=="COM_NONFREIGHT") & ((comb$I<=2107 & comb$J<=2107)),], src=="3C Model"),        fill="green", alpha=0.2, binwidth=2, aes(y=..density..))+
+  geom_histogram(data=subset(comb[(comb$mode=="LTRK" | comb$mode=="COM_FREIGHT" | comb$mode=="COM_NONFREIGHT") & ((comb$I<=2107 & comb$J<=2107)),], src=="Old MORPC Model"), fill="blue",  alpha=0.2, binwidth=2, aes(y=..density..))+
+  labs(title="TLFD: II 4T Trips")+
+  theme_dcurve()
+
+ggplot(data=comb, aes(dist, weight=ntrips)) + 
+  geom_histogram(data=subset(comb[(comb$mode=="SUT" | comb$mode=="MTRK") & ((comb$I<=2107 & comb$J<=2107)),], src=="3C Model"),        fill="green", alpha=0.2, binwidth=2, aes(y=..density..))+
+  geom_histogram(data=subset(comb[(comb$mode=="SUT" | comb$mode=="MTRK") & ((comb$I<=2107 & comb$J<=2107)),], src=="Old MORPC Model"), fill="blue",  alpha=0.2, binwidth=2, aes(y=..density..))+
+  labs(title="TLFD: II SUT Trips")+
+  theme_dcurve()
+
+ggplot(data=comb, aes(dist, weight=ntrips)) + 
+  geom_histogram(data=subset(comb[(comb$mode=="MUT" | comb$mode=="HTRK") & ((comb$I<=2107 & comb$J<=2107)),], src=="3C Model"),        fill="green", alpha=0.2, binwidth=2, aes(y=..density..))+
+  geom_histogram(data=subset(comb[(comb$mode=="MUT" | comb$mode=="HTRK") & ((comb$I<=2107 & comb$J<=2107)),], src=="Old MORPC Model"), fill="blue",  alpha=0.2, binwidth=2, aes(y=..density..))+
+  labs(title="TLFD: II MUT Trips")+
+  theme_dcurve()
+
+
+```
+
+
+
